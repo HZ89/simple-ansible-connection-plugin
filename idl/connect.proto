@@ -6,8 +6,8 @@ option go_package = "./server/connection";
 service ConnectionService {
   rpc Connect(ConnectRequest) returns (ConnectResponse);
   rpc ExecCommand(CommandRequest) returns (CommandResponse);
-  rpc PutFile(FileTransferRequest) returns (TransferResponse);
-  rpc FetchFile(FileTransferRequest) returns (TransferResponse);
+  rpc PutFile(PutFileRequest) returns (PutFIleResponse);
+  rpc FetchFile(FetchFileRequest) returns (FetchFileResponse);
   rpc Close(CloseRequest) returns (CloseResponse);
 }
 
@@ -33,14 +33,25 @@ message CommandResponse {
   string stderr = 3;
 }
 
-message FileTransferRequest {
+message PutFileRequest {
   string local_path = 1;
   string remote_path = 2;
+  bytes file_data = 3;
 }
 
-message TransferResponse {
+message PutFIleResponse {
   bool success = 1;
   string message = 2;
+}
+
+message FetchFileRequest {
+  string remote_path = 1;
+}
+
+message FetchFileResponse {
+  bool success = 1;
+  string message = 2;
+  bytes file_data = 3;
 }
 
 message CloseRequest {}
