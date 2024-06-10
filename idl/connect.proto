@@ -12,10 +12,6 @@ service ConnectionService {
 }
 
 message ConnectRequest {
-  string host = 1;
-  string user = 2;
-  string password = 3;
-  int32 port = 4;
 }
 
 message ConnectResponse {

@@ -8,7 +8,7 @@ ifeq ($(origin GO_LOCAL_VERSION),undefined)
 GO_LOCAL_VERSION := 1.21
 endif
 
-MAIN_BIN := target/ansible-grpc-connection-server
+MAIN_BIN ?= target/ansible-grpc-connection-server
 
 GIT_COMMIT:=$(shell git rev-parse "HEAD^{commit}" 2>/dev/null)
 
@@ -57,13 +57,16 @@ VERSION_PACKAGE := $(PACKAGE)/server/version
 VERSION_LDFLAGS := -X $(VERSION_PACKAGE).gitVersion=$(GIT_VERSION) -X $(VERSION_PACKAGE).gitCommit=$(GIT_COMMIT) -X $(VERSION_PACKAGE).gitTreeState=$(GIT_TREE_STATE) -X $(VERSION_PACKAGE).buildDate=$(BUILD_DATE)
 ARCH?=$(shell uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
 OS?=$(shell uname -s |  tr '[:upper:]' '[:lower:]')
+ifdef DBUG
+GCFLAGS:="all=-N -l"
+endif
 
 .PHONY: all
 all: clean gen build
 
 .PHONY: gen
 gen: # @HELP generate protobuf codes
-gen:
+gen: gen-clean
 	@echo "generate golang and python protobuf codes"
 	@protoc -I=./idl --go-grpc_out=. --go_out=. ./idl/connect.proto
 	@python -m grpc_tools.protoc -I ./idl --python_out=./plugin --pyi_out=./plugin --grpc_python_out=./plugin ./idl/connect.proto
@@ -76,26 +79,9 @@ build: $(OS)
 linux:
 	@echo "Building linux/$(ARCH) binary '$(VERSION)'"
 	@mkdir -p target
-	@CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) go build \
+	@CGO_ENABLED=1 GOOS=linux GOARCH=$(ARCH) go build \
+		-gcflags "$(GCFLAGS)" \
 		-o $(MAIN_BIN)_linux_$(ARCH) \
-		-ldflags "$(VERSION_LDFLAGS)" \
-		./server/main.go
-
-.PHONY: darwin
-darwin:
-	@echo "Building darwin/$(ARCH) binary '$(VERSION)'"
-	@mkdir -p target
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=$(ARCH) go build \
-		-o $(MAIN_BIN)_darwin_$(ARCH) \
-		-ldflags "$(VERSION_LDFLAGS)" \
-		./server/main.go
-
-.PHONY: windows
-windows:
-	@echo "Building windows/$(ARCH) binary '$(VERSION)'"
-	@mkdir -p target
-	@CGO_ENABLED=0 GOOS=windows GOARCH=$(ARCH) go build \
-		-o $(MAIN_BIN)_windows_$(ARCH).exe \
 		-ldflags "$(VERSION_LDFLAGS)" \
 		./server/main.go
 

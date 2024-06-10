@@ -3,6 +3,7 @@ module github.com/HZ89/simple-ansible-connection-plugin
 go 1.22.2
 
 require (
+	github.com/msteinert/pam/v2 v2.0.0
 	github.com/spf13/pflag v1.0.5
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1
