@@ -309,3 +309,5 @@ cython_debug/
 # ignore protobuf python generated files
 **/**pb2**.py
 **/**.pyi
+inventory/ed25519*
+**.vscode**

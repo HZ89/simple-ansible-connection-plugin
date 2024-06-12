@@ -88,7 +88,7 @@ linux:
 .PHONY: test
 test: # @HELP run a local test
 	@echo "Run local test"
-	@./test.sh
+	@ANSIBLE_CONNECTION_PLUGINS=./plugin ansible -i ./inventory/hosts.ini my_hosts -m command -a "echo 'Hello from gRPC connection plugin'" -vvv
 
 .PHONY: version
 version: # @HELP outputs the version string
@@ -115,3 +115,10 @@ help:
 	        BEGIN {FS = ": *# *@HELP"};           \
 	        { printf "  %-30s %s\n", $$1, $$2 };  \
 	    '
+.PHONY: debug
+help: #@DEBUG run a dlv debug server in a container expose port 40000 for remote debug
+debug:
+	@ssh-keygen -t ed25519 -q -N '' -f ./inventory/ed25519 <<<y >/dev/null 2>&1
+	@docker build --platform linux/amd64 --rm -t ansible-grpc:debug -f ./Dockerfile.debug .
+	@docker stop ansible-grpc-debug >/dev/null 2>&1 || true
+	@docker run -d --name ansible-grpc-debug --rm -p 50051:50051 -p 40000:40000 --security-opt="apparmor=unconfined" --cap-add=SYS_PTRACE ansible-grpc:debug

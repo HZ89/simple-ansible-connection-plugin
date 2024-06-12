@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
+	"encoding/base64"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"os/user"
 
+	"github.com/HZ89/simple-ansible-connection-plugin/server/authenicate"
 	pb "github.com/HZ89/simple-ansible-connection-plugin/server/connection"
-	"github.com/msteinert/pam/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -24,44 +24,30 @@ type server struct {
 	whiteList map[string]bool
 }
 
-func (s *server) pamAuthenticate(user, password string) (bool, error) {
-	tx, err := pam.StartFunc("login", user, func(s pam.Style, msg string) (string, error) {
-		switch s {
-		case pam.ErrorMsg:
-			klog.ErrorS(errors.New(msg), "get a error msg from pam")
-			return "", errors.New(msg)
-		default:
-			return password, nil
-		}
-	})
-	if err != nil {
-		klog.V(3).ErrorS(err, "pam exec failed", "user", user)
-		return false, err
-	}
-
-	if err := tx.Authenticate(0); err != nil {
-		klog.V(3).ErrorS(err, "pam auth failed", "user", user)
-		return false, nil
-	}
-
-	return true, nil
-}
-
 func (s *server) Authenticate(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Errorf(codes.InvalidArgument, "metadata is nil")
 	}
-	userName, ok := md["user"]
+	username, ok := md["user"]
 	if !ok {
 		return nil, status.Errorf(codes.Unauthenticated, "user not authenticated")
 	}
-	if len(userName) != 1 {
+	if len(username) != 1 {
 		return nil, status.Errorf(codes.Unauthenticated, "only allowed to authenticate one user")
 	}
+	password, passwordAuth := md["password"]
+	signed, sok := md["signed-data"]
+	finger, fok := md["pub-key-fingerprint"]
+	algorithm, aok := md["pub-key-algorithm"]
+	sshKeyAuth := sok && fok && aok
+	if sshKeyAuth && passwordAuth {
+		passwordAuth = false
+	}
+
 	// confirm user exists
-	if _, err := user.Lookup(userName[0]); err != nil {
-		klog.V(3).ErrorS(err, "user lookup failed", "user", userName[0])
+	if _, err := user.Lookup(username[0]); err != nil {
+		klog.V(3).ErrorS(err, "user lookup failed", "user", username[0])
 		if _, ok := err.(user.UnknownUserError); ok {
 			return nil, status.Errorf(codes.Unauthenticated, "user not authenticated")
 		}
@@ -71,26 +57,39 @@ func (s *server) Authenticate(ctx context.Context, req any, info *grpc.UnaryServ
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "peer info is nil")
 	}
-	if s.whiteList[p.Addr.String()] {
-		klog.V(3).InfoS("client already whitelisted", "user", userName, "clientIP", p.Addr.String())
-		return handler(ctx, req)
-	}
-	password, ok := md["password"]
-	if !ok {
-		return nil, status.Errorf(codes.Unauthenticated, "password not exists")
-	}
-	if len(password) != 1 {
-		return nil, status.Errorf(codes.Unauthenticated, "only allowed to authenticate one password")
-	}
-	if pass, err := s.pamAuthenticate(userName[0], password[0]); err == nil {
-		klog.V(3).InfoS("client try to authentic", "user", userName, "clientIP", p.Addr.String(), "passed", pass)
-		if pass {
-			return handler(ctx, req)
+
+	var pass bool
+	var err error
+	switch {
+	case passwordAuth:
+		if pass, err = authenicate.PamAuthenticate(username[0], password[0]); err == nil {
+			klog.V(3).InfoS("client try to authentic", "user", username, "clientIP", p.Addr.String(), "passed", pass)
 		}
-	} else {
-		klog.V(3).ErrorS(err, "client try to authentic failed", "user", userName)
+
+	case sshKeyAuth:
+		signedData, err := base64.StdEncoding.DecodeString(signed[0])
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to decode ssh signature data: %v", err)
+		}
+
+		pass, err = authenicate.SSHAuthenticate(&authenicate.SSHAuthInfo{
+			SingedData:  signedData,
+			Fingerprint: []byte(finger[0]),
+			Algorithm:   algorithm[0],
+			Username:    username[0],
+		})
+
+	default:
+		if s.whiteList[p.Addr.String()] {
+			klog.V(3).InfoS("client already whitelisted", "user", username, "clientIP", p.Addr.String())
+			pass = true
+		}
 	}
-	return nil, status.Errorf(codes.PermissionDenied, "authentication failure")
+	if !pass || err != nil {
+		klog.V(3).ErrorS(err, "failed to authenticate", "user", username, "clientIP", p.Addr.String())
+		return nil, status.Errorf(codes.PermissionDenied, "authentication failure")
+	}
+	return handler(ctx, req)
 }
 
 func (s *server) Connect(ctx context.Context, req *pb.ConnectRequest) (*pb.ConnectResponse, error) {
@@ -98,7 +97,7 @@ func (s *server) Connect(ctx context.Context, req *pb.ConnectRequest) (*pb.Conne
 }
 
 func (s *server) ExecCommand(ctx context.Context, req *pb.CommandRequest) (*pb.CommandResponse, error) {
-	klog.InfoS("Executing command", "req", klog.Format(req))
+	klog.V(5).InfoS("Executing command", "req", klog.Format(req))
 	cmd := exec.Command("sh", "-c", req.Command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -116,19 +115,19 @@ func (s *server) ExecCommand(ctx context.Context, req *pb.CommandRequest) (*pb.C
 	}, nil
 }
 
-func (s *server) PutFile(ctx context.Context, req *pb.PutFileRequest) (*pb.PutFIleResponse, error) {
+func (s *server) PutFile(ctx context.Context, req *pb.PutFileRequest) (*pb.PutFileResponse, error) {
 	// Implement file transfer logic here
-	klog.InfoS("Putting file request", "path", req.RemotePath)
-	klog.V(5).InfoS("file content", "file_data", string(req.FileData))
+	klog.V(5).InfoS("Putting file request", "path", req.RemotePath)
+	klog.V(9).InfoS("file content", "file_data", string(req.FileData))
 	if err := os.WriteFile(req.RemotePath, req.FileData, 777); err != nil {
-		return &pb.PutFIleResponse{Message: err.Error(), Success: false}, nil
+		return &pb.PutFileResponse{Message: err.Error(), Success: false}, nil
 	}
-	return &pb.PutFIleResponse{Success: true, Message: "File transferred"}, nil
+	return &pb.PutFileResponse{Success: true, Message: "File transferred"}, nil
 }
 
 func (s *server) FetchFile(ctx context.Context, req *pb.FetchFileRequest) (*pb.FetchFileResponse, error) {
 	// Implement file fetching logic here
-	klog.InfoS("Fetching file request", "req", "path", req.RemotePath)
+	klog.V(5).InfoS("Fetching file request", "req", "path", req.RemotePath)
 	data, err := os.ReadFile(req.RemotePath)
 	if err != nil {
 		return &pb.FetchFileResponse{Message: err.Error(), Success: false}, nil
@@ -138,7 +137,7 @@ func (s *server) FetchFile(ctx context.Context, req *pb.FetchFileRequest) (*pb.F
 
 func (s *server) Close(ctx context.Context, req *pb.CloseRequest) (*pb.CloseResponse, error) {
 	// Implement connection close logic here
-	klog.InfoS("Closing request", "req", klog.Format(req))
+	klog.V(5).InfoS("Closing request", "req", klog.Format(req))
 	return &pb.CloseResponse{Success: true, Message: "Connection closed"}, nil
 }
 
