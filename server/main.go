@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	goflag "flag"
 	"log"
 	"net"
 	"os"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/HZ89/simple-ansible-connection-plugin/server/authenicate"
 	pb "github.com/HZ89/simple-ansible-connection-plugin/server/connection"
+	"github.com/HZ89/simple-ansible-connection-plugin/server/version/verflag"
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -141,12 +144,29 @@ func (s *server) Close(ctx context.Context, req *pb.CloseRequest) (*pb.CloseResp
 	return &pb.CloseResponse{Success: true, Message: "Connection closed"}, nil
 }
 
+var whiteList = make([]string, 0)
+var address = ":50051"
+
+func init() {
+	klog.InitFlags(goflag.CommandLine)
+	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	verflag.AddFlags(pflag.CommandLine)
+	pflag.StringArrayVarP(&whiteList, "whiteList", "w", whiteList, "white list to allow connection")
+	pflag.StringVarP(&address, "address", "add", address, "address to listen on")
+	pflag.Parse()
+}
+
 func main() {
-	lis, err := net.Listen("tcp", ":50051")
+	verflag.PrintAndExitIfRequested("ansible-grpc-connection-server")
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		klog.Fatalf("failed to listen: %v", err)
 	}
-	server := &server{}
+	white := make(map[string]bool)
+	for _, w := range whiteList {
+		white[w] = true
+	}
+	server := &server{whiteList: white}
 	opts := []grpc.ServerOption{grpc.UnaryInterceptor(server.Authenticate)}
 
 	s := grpc.NewServer(opts...)

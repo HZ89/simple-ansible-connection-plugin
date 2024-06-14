@@ -102,6 +102,7 @@ clean: bin-clean gen-clean
 
 bin-clean:
 	@rm -rf target
+	@rm -rf ./inventory/ed25519*
 
 gen-clean:
 	@rm -rf ./plugin/*pb2*
