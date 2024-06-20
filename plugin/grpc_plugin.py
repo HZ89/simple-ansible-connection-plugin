@@ -12,7 +12,7 @@ from ansible.plugins.connection import ConnectionBase, ensure_connect
 from ansible.errors import AnsibleConnectionFailure
 import connect_pb2
 import connect_pb2_grpc
-from ansible.utils.display import Display``
+from ansible.utils.display import Display
 display = Display()
 
 class AuthInterceptor(UnaryUnaryClientInterceptor):

@@ -152,7 +152,7 @@ func init() {
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	verflag.AddFlags(pflag.CommandLine)
 	pflag.StringArrayVarP(&whiteList, "whiteList", "w", whiteList, "white list to allow connection")
-	pflag.StringVarP(&address, "address", "add", address, "address to listen on")
+	pflag.StringVarP(&address, "liston", "l", address, "address to listen on")
 	pflag.Parse()
 }
 
