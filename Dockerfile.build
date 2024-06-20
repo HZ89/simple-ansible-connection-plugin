@@ -1,0 +1,13 @@
+FROM golang:1.22-bookworm AS build
+
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2 && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28 && \
+    apt update && apt install -y protobuf-compiler libpam0g-dev
+WORKDIR /server
+RUN --mount=target=. \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    make MAIN_BIN=/out/server build
+
+FROM scratch AS binaries
+COPY --from=build /out/server_linux_amd64 /ansible-grpc-connection-server

@@ -57,12 +57,16 @@ VERSION_PACKAGE := $(PACKAGE)/server/version
 VERSION_LDFLAGS := -X $(VERSION_PACKAGE).gitVersion=$(GIT_VERSION) -X $(VERSION_PACKAGE).gitCommit=$(GIT_COMMIT) -X $(VERSION_PACKAGE).gitTreeState=$(GIT_TREE_STATE) -X $(VERSION_PACKAGE).buildDate=$(BUILD_DATE)
 ARCH?=$(shell uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
 OS?=$(shell uname -s |  tr '[:upper:]' '[:lower:]')
+BUILD_METHOD:="build"
+ifneq ($(OS), "linux")
+BUILD_METHOD=docker-build
+endif
 ifdef DBUG
 GCFLAGS:="all=-N -l"
 endif
 
 .PHONY: all
-all: clean gen build
+all: clean gen $(BUILD_METHOD)
 
 .PHONY: gen
 gen: # @HELP generate protobuf codes
@@ -76,6 +80,7 @@ build: # @HELP build binaries
 build: $(OS)
 
 .PHONY: linux
+linux: # @HELP build binaries for linux/$ARCH
 linux:
 	@echo "Building linux/$(ARCH) binary '$(VERSION)'"
 	@mkdir -p target
@@ -84,6 +89,13 @@ linux:
 		-o $(MAIN_BIN)_linux_$(ARCH) \
 		-ldflags "$(VERSION_LDFLAGS)" \
 		./server/main.go
+
+.PHONY: docekr-build
+docker-build: # @HELP if host os is not linux build binaries in a linux/amd64 docker container
+docker-build:
+	@echo "Building linux/$(ARCH) binary '$(VERSION)' in docker"
+	@mkdir -p target
+	@docker build --platform linux/amd64 --output target -f Dockerfile.build --target binaries .
 
 .PHONY: test
 test: # @HELP run a local test
@@ -108,6 +120,14 @@ gen-clean:
 	@rm -rf ./plugin/*pb2*
 	@rm -rf ./server/connection/*pb.go
 
+.PHONY: debug
+debug: #@HELP run a dlv debug server in a container expose port 40000 for remote debug
+debug:
+	@ssh-keygen -t ed25519 -q -N '' -f ./inventory/ed25519 <<<y >/dev/null 2>&1
+	@docker build --platform linux/amd64 --rm -t ansible-grpc:debug -f ./Dockerfile.debug .
+	@docker stop ansible-grpc-debug >/dev/null 2>&1 || true
+	@docker run -d --name ansible-grpc-debug --rm -p 50051:50051 -p 40000:40000 --security-opt="apparmor=unconfined" --cap-add=SYS_PTRACE ansible-grpc:debug
+
 help: # @HELP prints this message
 help:
 	@echo "TARGETS:"
@@ -116,10 +136,3 @@ help:
 	        BEGIN {FS = ": *# *@HELP"};           \
 	        { printf "  %-30s %s\n", $$1, $$2 };  \
 	    '
-.PHONY: debug
-help: #@DEBUG run a dlv debug server in a container expose port 40000 for remote debug
-debug:
-	@ssh-keygen -t ed25519 -q -N '' -f ./inventory/ed25519 <<<y >/dev/null 2>&1
-	@docker build --platform linux/amd64 --rm -t ansible-grpc:debug -f ./Dockerfile.debug .
-	@docker stop ansible-grpc-debug >/dev/null 2>&1 || true
-	@docker run -d --name ansible-grpc-debug --rm -p 50051:50051 -p 40000:40000 --security-opt="apparmor=unconfined" --cap-add=SYS_PTRACE ansible-grpc:debug
