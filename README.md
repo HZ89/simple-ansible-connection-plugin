@@ -1,47 +1,87 @@
+
 # Simple Ansible Connection Plugin
 
-This repository provides a gRPC-based Ansible connection plugin that supports SSH key-based challenge-response
-authentication. The plugin and server are implemented in Python and Go, respectively.
+A simple Ansible connection plugin that uses gRPC. This project includes both client and server implementations.
+
+## Features
+
+- gRPC-based connection plugin for Ansible
+- SSH key-based authentication
+- Dynamic SSH key reloading
+- Support for user-specific environment variables
+- Systemd service configuration for gRPC server
+
+## Installation
+
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/HZ89/simple-ansible-connection-plugin.git
+    cd simple-ansible-connection-plugin
+    ```
+
+2. Build the project:
+    ```bash
+    make
+    ```
+
+3. Ensure the required Python packages are installed:
+    ```bash
+    pip install paramiko grpcio
+    ```
+
+## Configuration
+
+### Dockerfile
+
+- The Dockerfile uses the `golang:1.22-buster` base image. If this image is not accessible, replace it with any suitable
+  Golang image from Docker Hub.
+
+### gRPC Plugin Enhancements
+
+- The plugin now includes improved SSH key handling and error management.
+- The `grpc_plugin.py` script fetches SSH keys and handles multiple keys dynamically.
+- The `SSHAuthenticator` class in `ssh_key.go` uses fsnotify to monitor changes in the authorized keys file and reload
+  keys automatically.
+- The main server code has been updated to parse structured metadata for authentication and support user-specific
+  environment variables during command execution.
+- Home directory tilde expansion is implemented for file paths in `PutFile` and `FetchFile` methods.
+
+### Systemd Service
+
+- A systemd service file `ansible-grpc-connection-server.service` is added to manage the gRPC server as a systemd
+  service.
 
 ## Usage
 
-### Building the Server
+1. Start the gRPC server:
+    ```bash
+    ./target/ansible-grpc-connection-server --v 3 -l ":60051"
+    ```
 
-To build the gRPC server, use the provided Makefile(only support linux):
+2. Configure the client to connect to the gRPC server by setting the appropriate connection parameters in your Ansible
+   playbook.
 
-```sh
-make build
-```
+## Systemd Service Setup
 
-### Running the Server
+1. Copy the systemd service file to `/etc/systemd/system/`:
+    ```bash
+    cp utils/ansible-grpc-connection-server.service /etc/systemd/system/
+    ```
 
-You can run the server using Docker:
+2. Reload systemd manager configuration:
+    ```bash
+    systemctl daemon-reload
+    ```
 
-```sh
-docker build -t grpc-server .
-docker run -p 50051:50051 grpc-server
-```
-
-### Ansible Configuration
-
-Update your Ansible inventory file (`inventory/hosts.ini`) with the target hosts and connection details:
-
-```ini
-[my_hosts]
-127.0.0.1 ansible_port=50051 ansible_user=my_user ansible_connection=grpc_plugin
-```
-
-### Using the Plugin
-
-Execute Ansible commands using the custom gRPC connection plugin:
-
-```sh
-ANSIBLE_CONNECTION_PLUGINS=./plugin ansible -i ./inventory/hosts.ini my_hosts -m command -a "echo 'Hello from gRPC connection plugin'" -vvv
-```
+3. Enable and start the service:
+    ```bash
+    systemctl enable ansible-grpc-connection-server
+    systemctl start ansible-grpc-connection-server
+    ```
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+Contributions are welcome! Please fork the repository and submit a pull request for any improvements or bug fixes.
 
 ## License
 
