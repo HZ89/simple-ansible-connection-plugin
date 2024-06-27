@@ -1,0 +1,12 @@
+[Unit]
+Description=gRPC Server for Ansible Connection Plugin
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ansible-grpc-connection-server --v 3 -l ":60051" --authfile /root/grpc_authorized_keys
+WorkingDirectory=/usr/local/bin
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
