@@ -1,18 +1,33 @@
 syntax = "proto3";
 
 package connection;
-option go_package = "./server/connection";
 
+option go_package = "./server/pkg/connection";
+
+// Service Definition with Existing and New File Transfer Methods
 service ConnectionService {
   rpc Connect(ConnectRequest) returns (ConnectResponse);
+
   rpc ExecCommand(CommandRequest) returns (CommandResponse);
-  rpc PutFile(PutFileRequest) returns (PutFileResponse);
-  rpc FetchFile(FetchFileRequest) returns (FetchFileResponse);
+
+  // Existing Unary RPC for PutFile
+  rpc PutFile(PutFileRequest) returns (PutFileResponse){
+    option deprecated = true;
+  }
+
+  // Existing Unary RPC for FetchFile
+  rpc FetchFile(FetchFileRequest) returns (FetchFileResponse){
+    option deprecated = true;
+  }
+
+  // New Unified Bidirectional Streaming RPC for File Transfer
+  rpc TransferFile(stream FileTransferMessage) returns (stream FileTransferMessage);
+
   rpc Close(CloseRequest) returns (CloseResponse);
 }
 
-message ConnectRequest {
-}
+// Existing Message Definitions
+message ConnectRequest {}
 
 message ConnectResponse {
   bool success = 1;
@@ -29,6 +44,7 @@ message CommandResponse {
   string stderr = 3;
 }
 
+// Existing PutFileRequest
 message PutFileRequest {
   string local_path = 1;
   string remote_path = 2;
@@ -40,6 +56,7 @@ message PutFileResponse {
   string message = 2;
 }
 
+// Existing FetchFileRequest
 message FetchFileRequest {
   string remote_path = 1;
 }
@@ -55,4 +72,36 @@ message CloseRequest {}
 message CloseResponse {
   bool success = 1;
   string message = 2;
+}
+
+// New Unified File Transfer Messages
+message FileTransferMessage {
+  oneof payload {
+    ControlMessage control = 1; // Control operations like initiate, complete
+    FileData data = 2;          // Actual file data chunks
+  }
+}
+
+// Control Message for Managing Transfers
+message ControlMessage {
+  enum Operation {
+    UNKNOWN = 0;
+    UPLOAD = 1;
+    DOWNLOAD = 2;
+  }
+
+  Operation operation = 1;     // Specifies the operation type
+  FileInfo info = 2;            // File metadata
+}
+
+// File Information Metadata
+message FileInfo {
+  string local_path = 1;
+  string remote_path = 2;
+  int64 file_size = 3;          // Size of the file in bytes
+}
+
+// File Data Chunk for Unified Transfer
+message FileData {
+  bytes data = 1;               // Chunk of file data
 }
