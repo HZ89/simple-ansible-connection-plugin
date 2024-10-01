@@ -162,7 +162,7 @@ func (s *SSHAuthenticator) Authenticate(info *SSHAuthInfo) (bool, error) {
 		return false, err
 	}
 	var sig ssh.Signature
-	if err := ssh.Unmarshal(info.SingedData, &sig); err != nil {
+	if err := ssh.Unmarshal(info.SignedData, &sig); err != nil {
 		return false, fmt.Errorf("error parsing ssh signature: %w", err)
 	}
 	if err := publicKey.Verify([]byte(info.Username), &sig); err != nil {
@@ -172,7 +172,7 @@ func (s *SSHAuthenticator) Authenticate(info *SSHAuthInfo) (bool, error) {
 }
 
 type SSHAuthInfo struct {
-	SingedData  []byte
+	SignedData  []byte
 	Fingerprint []byte
 	Algorithm   string
 	Username    string
