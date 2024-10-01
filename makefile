@@ -52,7 +52,7 @@ else
 BUILD_DATE:=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 endif
 
-VERSION_PACKAGE := $(PACKAGE)/server/version
+VERSION_PACKAGE := $(PACKAGE)/server/pkg/version
 # set the build information version ldflags (but not other ldflags)
 VERSION_LDFLAGS := -X $(VERSION_PACKAGE).gitVersion=$(GIT_VERSION) -X $(VERSION_PACKAGE).gitCommit=$(GIT_COMMIT) -X $(VERSION_PACKAGE).gitTreeState=$(GIT_TREE_STATE) -X $(VERSION_PACKAGE).buildDate=$(BUILD_DATE)
 ARCH?=$(shell uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
