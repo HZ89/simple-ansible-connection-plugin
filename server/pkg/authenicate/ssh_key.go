@@ -21,14 +21,7 @@ type SSHAuthenticator struct {
 }
 
 func NewSSHAuthenticator(authorizedFilePath string) (*SSHAuthenticator, error) {
-	defaultAuthorizedFilePath := authorizedFilePath
-	if defaultAuthorizedFilePath == "" {
-		u, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-		defaultAuthorizedFilePath = path.Join(u.HomeDir, ".ssh", "authorized_keys")
-	}
+
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -39,12 +32,13 @@ func NewSSHAuthenticator(authorizedFilePath string) (*SSHAuthenticator, error) {
 		watcher:            w,
 		subWriteEventChans: make(map[string]chan fsnotify.Op),
 	}
-
-	if err = w.Add(defaultAuthorizedFilePath); err != nil {
-		return nil, fmt.Errorf("error adding authorized keys file %q: %w", defaultAuthorizedFilePath, err)
-	}
-	if err = authenicator.loadAuthenticateKeysFromFile(defaultAuthorizedFilePath); err != nil {
-		return nil, fmt.Errorf("error loading authorized keys file %q: %w", defaultAuthorizedFilePath, err)
+	if authorizedFilePath != "" {
+		if err = w.Add(authorizedFilePath); err != nil {
+			return nil, fmt.Errorf("error adding authorized keys file %q: %w", authorizedFilePath, err)
+		}
+		if err = authenicator.loadAuthenticateKeysFromFile(authorizedFilePath); err != nil {
+			return nil, fmt.Errorf("error loading authorized keys file %q: %w", authorizedFilePath, err)
+		}
 	}
 
 	go authenicator.watchFile()
@@ -162,7 +156,7 @@ func (s *SSHAuthenticator) Authenticate(info *SSHAuthInfo) (bool, error) {
 		return false, err
 	}
 	var sig ssh.Signature
-	if err := ssh.Unmarshal(info.SingedData, &sig); err != nil {
+	if err := ssh.Unmarshal(info.SignedData, &sig); err != nil {
 		return false, fmt.Errorf("error parsing ssh signature: %w", err)
 	}
 	if err := publicKey.Verify([]byte(info.Username), &sig); err != nil {
@@ -172,7 +166,7 @@ func (s *SSHAuthenticator) Authenticate(info *SSHAuthInfo) (bool, error) {
 }
 
 type SSHAuthInfo struct {
-	SingedData  []byte
+	SignedData  []byte
 	Fingerprint []byte
 	Algorithm   string
 	Username    string

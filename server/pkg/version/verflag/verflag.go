@@ -7,7 +7,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	versionP "github.com/HZ89/simple-ansible-connection-plugin/server/version"
+	versionP "github.com/HZ89/simple-ansible-connection-plugin/server/pkg/version"
 )
 
 type versionValue int

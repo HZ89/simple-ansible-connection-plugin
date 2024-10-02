@@ -10,13 +10,13 @@ RUN --mount=target=. \
     --mount=type=cache,target=/go/pkg \
     make MAIN_BIN=/out/server DEBUG=1 build
 
-FROM golang:1.22-bookworm AS DLV
+FROM golang:1.22-bookworm AS dlv
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
 FROM ubuntu:22.04
 WORKDIR /
 COPY --from=build /out/server_linux_amd64 /
-COPY --from=DLV /go/bin/dlv /
+COPY --from=dlv /go/bin/dlv /
 COPY inventory/ed25519.pub /key/ed25519.pub
 RUN adduser test && \
     apt update && apt install -y python3 &&\
@@ -24,4 +24,4 @@ RUN adduser test && \
     mkdir -p /home/test/.ssh/ && \
     cat /key/ed25519.pub > /home/test/.ssh/authorized_keys && \
     chown test.test /home/test/.ssh -R && chmod 400 /home/test/.ssh/authorized_keys
-CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/server_linux_amd64"]
+CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2","--log", "--log-output=debugger,rpc", "--accept-multiclient", "exec", "/server_linux_amd64", "--", "-v=5"]
