@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -45,4 +47,23 @@ func ExpandHomeDirectory(username, path string) (string, error) {
 // LookupUser is a wrapper around user.Lookup for easier testing
 var LookupUser = func(username string) (*user.User, error) {
 	return user.Lookup(username)
+}
+
+func GetUserIDs(username string) (int, int, error) {
+	usr, err := LookupUser(username)
+	if err != nil {
+		return 0, 0, fmt.Errorf("user lookup failed: %v", err)
+	}
+
+	uid, err := strconv.Atoi(usr.Uid)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid UID: %v", err)
+	}
+
+	gid, err := strconv.Atoi(usr.Gid)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid GID: %v", err)
+	}
+
+	return uid, gid, nil
 }

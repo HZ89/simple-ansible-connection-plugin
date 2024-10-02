@@ -39,8 +39,6 @@ func Execute() {
 	pflag.StringVarP(&cfg.AuthenticatorFilePath, "authfile", "a", "", "SSH authenticator file path")
 	pflag.Parse()
 
-	// Initialize klog
-	klog.InitFlags(nil)
 	defer klog.Flush()
 
 	// Listen on the specified address

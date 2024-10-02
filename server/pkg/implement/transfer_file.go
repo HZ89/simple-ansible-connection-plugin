@@ -125,6 +125,17 @@ func (s *Server) handleUpload(stream pb.ConnectionService_TransferFileServer, in
 		return status.Errorf(codes.DataLoss, errMsg)
 	}
 
+	uid, gid, err := utils.GetUserIDs(auth.User)
+	if err != nil {
+		klog.ErrorS(err, "Failed to lookup user", "user", auth.User)
+		return status.Errorf(codes.Internal, "failed to lookup user: %v", err)
+	}
+
+	if err := os.Chown(filePath, uid, gid); err != nil {
+		klog.ErrorS(err, "Failed to change ownership of file", "file_path", filePath)
+		return status.Errorf(codes.Internal, "failed to change ownership of file: %v", err)
+	}
+
 	// Send a final ControlMessage as acknowledgment
 	ackMsg := &pb.FileTransferMessage{
 		Payload: &pb.FileTransferMessage_Control{
